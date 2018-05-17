@@ -24,7 +24,7 @@ class Brain:
         model = Sequential()
 
         model.add(Dense(output_dim=64, activation='relu', input_dim=OBSERV_BATCH))#stateCnt
-        model.add(Dense(output_dim=64, activation='relu'))          #######################################
+        #model.add(Dense(output_dim=64, activation='relu'))          #######################################
         model.add(Dense(output_dim=actionCnt, activation='linear'))
 
         opt = RMSprop(lr=0.00025)
@@ -72,7 +72,7 @@ class Memory:   # stored as ( s, a, r, s_ )
 MEMORY_CAPACITY = 100000
 BATCH_SIZE = 256
 
-GAMMA = 0.99
+GAMMA = 0.7
 
 MAX_EPSILON = 1
 MIN_EPSILON = 0.01
@@ -169,8 +169,8 @@ class Environment:
             else:
                 f_channel.write('\n')
 
-        state_batch = [0 for x in range(0, OBSERV_BATCH)]  
-        next_state_batch = [0 for x in range(0, OBSERV_BATCH)]  
+        state_batch = [0 for x in range(0, OBSERV_BATCH)]
+        next_state_batch = [0 for x in range(0, OBSERV_BATCH)]
 
         state_batch[0] = s
 
@@ -203,7 +203,7 @@ class Environment:
            #     #s_ = self.env.reset()
            #     print ("done\n")
 
-            for i in range(OBSERV_BATCH - 1, 0, -1): 
+            for i in range(OBSERV_BATCH - 1, 0, -1):
                 next_state_batch[i] = state_batch[i-1]
 
             next_state_batch[0]= s_
@@ -223,7 +223,7 @@ class Environment:
                     f_channel.write('\n')
 
             s = s_
-            for i in range(0, OBSERV_BATCH):   
+            for i in range(0, OBSERV_BATCH):
                 state_batch[i] = next_state_batch[i]
 
             R += r

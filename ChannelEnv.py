@@ -32,26 +32,29 @@ class Jammer:
     def __init__(self):
         self.type = channelConfig.JAMMER_TYPE
         self.block_cnt = channelConfig.BLOCK_CNT
-        self.state = 0
-        self.channel_p = channelConfig.CHANNEL_P[self.state]
-        self.p_aggre=[0 for x in range(CHANNEL_CNT+1)]
-        for i in range (1,CHANNEL_CNT+1):
+        # For Markov jammer
+        self.transfert_matrix = channelConfig.TRANSFERT_MATRIX
+        self.states = channelConfig.INITIAL_STATES
+        # For stocastic jammer
+        self.channel_p = channelConfig.CHANNEL_P
+        self.p_aggre = [0 for x in range(CHANNEL_CNT+1)]
+        for i in range(1, CHANNEL_CNT+1):
             self.p_aggre[i] = self.channel_p[i-1] + self.p_aggre[i-1]
 
     def changeState(self):
         if self.type == 'Markov_jammer':
-            if self.state == 0:
-                self.state = 1
-            else:
-                self.state = 0
-            self.channel_p = channelConfig.CHANNEL_P[self.state]
-            print (self.channel_p)
-            for i in range (1,CHANNEL_CNT+1):
-                self.p_aggre[i] = self.channel_p[i-1] + self.p_aggre[i-1]
-
+            for i in range(self.block_cnt):
+                state_p = self.transfert_matrix[self.states[i]]
+                p_aggre=[0 for x in range(CHANNEL_CNT+1)]
+                for j in range (1,CHANNEL_CNT+1):
+                    p_aggre[j] = state_p[j-1] + p_aggre[j-1]
+                t = random.random()
+                for j in range (1, CHANNEL_CNT+1):
+                    if p_aggre[j-1] < t and t <= p_aggre[j]:
+                        self.states[i] = j
+                        break
 
     def act(self):
-        self.changeState()
         channel_available = dict()
         for i in range(CHANNEL_CNT):
             channel_available[i+1] = 1
@@ -71,7 +74,7 @@ class Jammer:
                     #print("channel_p:", self.channel_p1[i])
                     #print("channel available")
                     channel_available[i+1] = 1         #this channel available
-        elif self.type == 'Random_jammer_2' or self.type == 'Markov_jammer':
+        elif self.type == 'Random_jammer_2':
             # A jammer blockes 3 channels at each timeslot with fixed probability
             ran = random.random()
             for i in range (CHANNEL_CNT):
@@ -86,6 +89,10 @@ class Jammer:
                 available_cnt = 0
                 for i in range (CHANNEL_CNT):
                     available_cnt += channel_available[i+1]
+        elif self.type == 'Markov_jammer':
+            self.changeState()
+            for i in range(self.block_cnt):
+                channel_available[self.states[i]] = 0
         else:
             print ("No jammer named:" + JAMMER_TYPE)
         return channel_available
@@ -270,7 +277,7 @@ class ChannelEnv(gym.Env):
 
         #    return np.array(state), self.rewards[key], True, {}
         self.channel_available = self.jammer.act()
-
+        self.updateStateTransfert()
         key = "%d-%d"%(state, action)   #将状态和动作组成字典的键值
         print("key:", key)
         #print("reward:",self.rewards[key])
@@ -283,20 +290,6 @@ class ChannelEnv(gym.Env):
             print("key not in dict:", key)
             next_state = state
         self.state = next_state
-
-        is_terminal = False
-
-#        if self.channel_available[next_state]:
-        if (next_state > CHANNEL_CNT):
-                   is_terminal = True #was True
-
-            #reward 定义
-        if key not in self.rewards:
-            print ("key not in reward dict")
-            r = 0.0
-        else:
-            print ("key in reward dict")
-            r = self.rewards[key]
 
    ###########in case of markov ################################################ I think the way we calculate reward matters
         if (self.jammer.type == 'Markov_jammer'):
@@ -313,21 +306,7 @@ class ChannelEnv(gym.Env):
             print(avail_sum_state)
             print(avail_sum_state_next)
 
-           # if (next_state == 2 * self.state_batch[0]):
-           #     r = 500
-           # elif (next_state == 0.5 * self.state_batch[0]):
-           #     r = -300
-
-           # elif (avail_sum_state < avail_sum_state_next):
-           #     r = 100#CORRECT_REWARD
-           # elif(avail_sum_state > avail_sum_state_next):
-           #     r = PUNISH_REWARD
-           # elif(avail_sum_state_next == OBSERV_BATCH):
-           #     r = 50#STUBBORN_REWARD
-           # else:
-           #     r = -10
-
-            r = avail_sum_state_next
+            r = avail_sum_state_next*2 - 1.9
         #############################################################################################################
         #刷新信道使用状态
         #self.refresh()
