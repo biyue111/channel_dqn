@@ -259,16 +259,33 @@ class Environment:
                 local_success_ls.append(local_success / block_num)
                 local_success = 0
                 block_cnt = 0
-        # Draw charts
-        plt.subplot(2,1,1) # Draw outage probability
+        f_agent.close()
+
+        f_channel = open("channel_available.csv", "r")
+        f_channel.readline()
+        jammed_time_cnt = [0] * self.channel_cnt
+        for i in range(0, literation):
+           step_str = f_channel.readline()
+           s = step_str.split(",")
+           for j in range(0, self.channel_cnt):
+               if int(s[j]) == 0:
+                   jammed_time_cnt[j] += 1
+        f_channel.close()
+
+        # Draw charts of users performence
+        plt.subplot(3,1,1) # Draw outage probability
         plt.plot(local_ind_ls, local_success_ls)
         plt.ylabel('Success Rate')
-        plt.subplot(2,1,2)
-        plt.bar(range(1, len(channel_chosen_cnt)+1), channel_chosen_cnt, color="blue", align='center')
+        plt.subplot(3,1,2)
+        plt.bar(range(1, self.channel_cnt+1), channel_chosen_cnt, color="blue", align="center")
+
+
+        # Draw chart of jammer performence
+        plt.subplot(3,1,3)
+        plt.bar(range(1, self.channel_cnt+1), jammed_time_cnt, color="yellow", align="center")
 
         plt.show()
 
-        f_agent.close()
 #            if done:
 #                break
 

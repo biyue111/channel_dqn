@@ -44,7 +44,7 @@ class Jammer:
     def changeState(self):
         if self.type == 'Markov_jammer':
             for i in range(self.block_cnt):
-                state_p = self.transfert_matrix[self.states[i]]
+                state_p = self.transfert_matrix[self.states[i]-1]
                 p_aggre=[0 for x in range(CHANNEL_CNT+1)]
                 for j in range (1,CHANNEL_CNT+1):
                     p_aggre[j] = state_p[j-1] + p_aggre[j-1]
@@ -56,8 +56,8 @@ class Jammer:
 
     def act(self):
         channel_available = dict()
-        for i in range(CHANNEL_CNT):
-            channel_available[i+1] = 1
+        for i in range(1, CHANNEL_CNT+1):
+            channel_available[i] = 1
         if self.type == 'Random_jammer_1':
             # A jammer blockes certain channels with fixed probability
             # The number of jammed channels is different at each timeslot
