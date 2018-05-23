@@ -10,6 +10,7 @@ import channelConfig as channelConfig
 global literation           #Number of test literation
 
 OBSERV_BATCH = channelConfig.OBSERV_BATCH
+USER_CNT = channelConfig.USER_CNT
 
 class Brain:
 
@@ -24,7 +25,7 @@ class Brain:
         model = Sequential()
 
         model.add(Dense(output_dim=64, activation='relu', input_dim=OBSERV_BATCH))#stateCnt
-        #model.add(Dense(output_dim=64, activation='relu'))          #######################################
+        model.add(Dense(output_dim=64, activation='relu'))          #######################################
         model.add(Dense(output_dim=actionCnt, activation='linear'))
 
         opt = RMSprop(lr=0.00025)
@@ -92,10 +93,15 @@ class Agent:
     def act(self, s):
         if random.random() < self.epsilon:
             print("*****random step*****")
-            return random.randint(0, self.actionCnt-1)
+            return random.randint(1, self.actionCnt - 1)
         else:
             print("*****predict step*****")
-            return numpy.argmax(self.brain.predictOne(s))
+            pred = self.brain.predictOne(s)
+            if numpy.argmax(pred) == 0:
+                index = numpy.argsort(pred)
+                return index[len(index)-2]
+            else:
+                return numpy.argmax(pred)
 
     def observe(self, sample):  # in (s, a, r, s_) format
         self.memory.add(sample)
@@ -152,7 +158,7 @@ class Environment:
         self.avg_step_100 = 0
 
     def run(self, agent):
-        s = self.env.reset()
+        ls_s = self.env.reset()
         R = 0
         step = 0                       #sum of steps in run_time period
         run_time = 0
@@ -160,7 +166,7 @@ class Environment:
 
         single_step = 0                #step for every successful try
         f_agent = open("agent.csv", "w")
-        f_agent.write('state,action,reward,next_state\n')
+        f_agent.write('user_number,state,action,reward,next_state\n')
         f_channel = open("channel_available.csv", "w")
         for i in range(self.channel_cnt):
             f_channel.write(str(i+1))
@@ -168,25 +174,27 @@ class Environment:
                 f_channel.write(',')
             else:
                 f_channel.write('\n')
+        state_batch_ls = [[0] * OBSERV_BATCH] * USER_CNT
+        next_state_batch_ls =  [[0] * OBSERV_BATCH] * USER_CNT
 
-        state_batch = [0 for x in range(0, OBSERV_BATCH)]
-        next_state_batch = [0 for x in range(0, OBSERV_BATCH)]
-
-        state_batch[0] = s
+        for i in range(USER_CNT):
+            state_batch_ls[i][0] = ls_s[i]
 
         for i in range(0, literation):
             self.env.render()
 
             #a = agent.act(s)
-            a = agent.act(state_batch)
+            ls_a = [0] * USER_CNT
+            for j in range(USER_CNT):
+                ls_a[j] = agent.act(state_batch_ls[j][0])
+            print("acts------------:", *ls_a)
 
             step += 1
             single_step += 1
 
-            print("act------------:", a+1)
-            self.env.env.setStateBatch(state_batch)#################################################
+            #self.env.env.setStateBatch(state_batch_ls)
 
-            s_, r, done, info = self.env.step(a+1)
+            ls_s_, r, done, info = self.env.step(ls_a)
             channel_available = self.env.env.getChannelAvailable()
             #self.env.env.getRewardChart()
             #self.env.env.getTChart()
@@ -202,19 +210,18 @@ class Environment:
            #     #agent.observe( (s, a, r, s_) )
            #     #s_ = self.env.reset()
            #     print ("done\n")
-
-            for i in range(OBSERV_BATCH - 1, 0, -1):
-                next_state_batch[i] = state_batch[i-1]
-
-            next_state_batch[0]= s_
-
+            for k in range(USER_CNT):
+                for j in range(OBSERV_BATCH - 1, 0, -1):
+                    next_state_batch_ls[k][j] = state_batch_ls[k][j-1]
+                next_state_batch_ls[k][0]= ls_s_[k]
             #agent.observe( (s, a, r, s_) ) #include add to memory
-            print ( "stuff to be observed#############",(np.array(state_batch), a, r, np.array(next_state_batch)) )
-            agent.observe( (np.array(state_batch), a, r, np.array(next_state_batch)) )###################################
+                print ( "stuff to be observed#############",(np.array(state_batch_ls[k]), ls_a[k], r, np.array(next_state_batch_ls[k])) )
+                agent.observe( (np.array(state_batch_ls[k]), ls_a[k], r, np.array(next_state_batch_ls[k])) )###################################
 
             agent.replay()
-            record_str = str(s)+','+str(a)+','+str(r)+','+str(s_)+'\n'
-            f_agent.write(record_str)
+            for k in range(USER_CNT):
+                record_str = str(k)+','+str(ls_s[k])+','+str(ls_a[k])+','+str(r)+','+str(ls_s_[k])+'\n'
+                f_agent.write(record_str)
             for j in range(self.channel_cnt):
                 f_channel.write(str(channel_available[j+1]))
                 if j < self.channel_cnt-1:
@@ -222,9 +229,10 @@ class Environment:
                 else:
                     f_channel.write('\n')
 
-            s = s_
-            for i in range(0, OBSERV_BATCH):
-                state_batch[i] = next_state_batch[i]
+            ls_s = ls_s_
+            for k in range(USER_CNT):
+                for i in range(0, OBSERV_BATCH):
+                    state_batch_ls[k][i] = next_state_batch_ls[k][i]
 
             R += r
 
@@ -245,7 +253,7 @@ class Environment:
 
         for i in range(0, literation):
             step_str = f_agent.readline()
-            s = int(step_str.split(",")[0]) # Read the current state
+            s = int(step_str.split(",")[1]) # Read the current state
             channel_chosen_cnt[self.env.env.getChannelNumber(s) - 1] += 1
             if not self.env.env.isChannelBlocked(s): # success connexion
                 success_connexion += 1
@@ -368,7 +376,7 @@ PROBLEM = 'Channel-v0'
 env = Environment(PROBLEM)
 
 stateCnt  = np.array(1)#env.env.observation_space.shape[0]
-actionCnt = env.channel_cnt
+actionCnt = env.channel_cnt + 1
 
 agent = Agent(stateCnt, actionCnt)
 

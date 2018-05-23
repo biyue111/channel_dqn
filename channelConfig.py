@@ -9,7 +9,7 @@ STUBBORN_REWARD = 10.0 #stick to a certain correct channel
 CHANNEL_CNT = 10
 STATE_CNT = CHANNEL_CNT * 2   #double of channal count
 
-USR_CNT = 3
+USER_CNT = 1
 REFRESH = 1
 REFRESH_METHOD_OLD = 0
 
@@ -34,6 +34,6 @@ TRANSFERT_MATRIX = [	[0.00, 0.50, 0.50, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00
 INITIAL_STATES = [1, 4, 7]
 
 ##channel1
-literation = 5000
+literation = 10000
 
 OBSERV_BATCH = 1 #number of timeslot to be observed

@@ -22,7 +22,7 @@ CHANNEL_CNT = channelConfig.CHANNEL_CNT
 STATE_CNT = channelConfig.STATE_CNT #double of channal count
 
 #BLOCK_CNT = channelConfig.BLOCK_CNT
-USR_CNT = channelConfig.USR_CNT
+USER_CNT = channelConfig.USER_CNT
 REFRESH = channelConfig.REFRESH
 #REFRESH_METHOD_OLD = channelConfig.REFRESH_METHOD_OLD
 #JAMMER_TYPE = channelConfig.JAMMER_TYPE
@@ -109,7 +109,7 @@ class ChannelEnv(gym.Env):
         self.y=[0 for x in range(CHANNEL_CNT)]
         self.channel_cnt = CHANNEL_CNT
         self.jammer = Jammer()
-        self.state_batch = [0 for x in range(OBSERV_BATCH)]
+        self.state_batch_ls = [[0]*OBSERV_BATCH] * USER_CNT
 
         for i in range (CHANNEL_CNT):
             if (i % 5 == 0):
@@ -177,8 +177,8 @@ class ChannelEnv(gym.Env):
         else:
             return s
 
-    def setStateBatch(self, s):
-        self.state_batch = s
+    def setStateBatch(self, s): # Read user's state
+        self.state_batch_ls = s
 
     #def jammerAction(self):
     #    for i in range(CHANNEL_CNT):
@@ -252,66 +252,59 @@ class ChannelEnv(gym.Env):
                 else:
                     self.t[key] = j + 1 + CHANNEL_CNT
 
-    def step(self, action):
+    def updateStates(self, action_ls): # To get the next_states of users
+        next_states = [0 for x in range(USER_CNT) ]
+        for i in range(USER_CNT):
+            if self.channel_available[action_ls[i]]:
+                next_states[i] = action_ls[i] + self.channel_cnt
+            else:
+                next_states[i] = action_ls[i]
+        return next_states
+
+
+    def step(self, action_ls):
             #系统当前状态
-        state = self.state
-        print("present state:", state)
-        #print("present state:", self.state_batch[0])
-
-#        if self.channel_available[state]:
-        #if (state > CHANNEL_CNT):
-        #    #print("this is the terminal state")
-        #    print("this is the terminal state")
-
-        #    key = "%d-%d"%(state, action)
-        #    if key in self.t:
-        #        print("key in dict:", key)
-        #        next_state = self.t[key]
-        #        print("next state:", next_state)
-        #    else:
-        #        print("key not in dict:", key)
-        #        next_state = state
-        #    self.state = next_state
-
-        #    self.refresh()
-
-        #    return np.array(state), self.rewards[key], True, {}
+        state_ls = [0] * USER_CNT
+        for i in range(USER_CNT):
+            state_ls[i] = self.state_batch_ls[i][0]
+        print("present state:", *state_ls)
         self.channel_available = self.jammer.act()
-        self.updateStateTransfert()
-        key = "%d-%d"%(state, action)   #将状态和动作组成字典的键值
-        print("key:", key)
-        #print("reward:",self.rewards[key])
-            #状态转移
-        if key in self.t:
-            print("key in dict:", key)
-            next_state = self.t[key]
-            print("next state:", next_state)
-        else:
-            print("key not in dict:", key)
-            next_state = state
-        self.state = next_state
+        next_state_ls = self.updateStates(action_ls)
+       # key = "%d-%d"%(state, action)   #将状态和动作组成字典的键值
+       # print("key:", key)
+       # #print("reward:",self.rewards[key])
+       #     #状态转移
+       # if key in self.t:
+       #     print("key in dict:", key)
+       #     next_state = self.t[key]
+       #     print("next state:", next_state)
+       # else:
+       #     print("key not in dict:", key)
+       #     next_state = state
+       # self.state = next_state
 
    ###########in case of markov ################################################ I think the way we calculate reward matters
         if (self.jammer.type == 'Markov_jammer'):
-            avail_sum_state = OBSERV_BATCH
-            avail_sum_state_next = OBSERV_BATCH                      #现在主要考虑的是OBSERV_BATCH长度中有几次通信成功
-            for i in range (OBSERV_BATCH):                           #对比当前状态的batch中的通信次数与下一状态batch的次数
-                if (self.isChannelBlocked(self.state_batch[i])):     #来给出reward  （代码中后四个elif）
-                    avail_sum_state -= 1
-            for i in range (OBSERV_BATCH-1):
-                if (self.isChannelBlocked(self.state_batch[i])):     #还有就是如果action与当前信道相同的情况
-                    avail_sum_state_next -= 1                        #见if和第一个elif
-            if (self.isChannelBlocked(next_state)):                  #总之目前的reward算法不适合科学。。。performance也很差
-                avail_sum_state_next -= 1
-            print(avail_sum_state)
-            print(avail_sum_state_next)
+            #avail_sum_state = OBSERV_BATCH * USER_CNT
+            #avail_sum_state_next = OBSERV_BATCH * USER_CNT                     #现在主要考虑的是OBSERV_BATCH长度中有几次通信成功
+            for j in range(USER_CNT): # update self.state_batch_ls
+                for i in range(OBSERV_BATCH - 1, 0, -1):
+                    self.state_batch_ls[j][i] = state_batch_ls[j][i-1]
+                self.state_batch_ls[j][0] = next_state_ls[j]
 
-            r = avail_sum_state_next*2 - 1.9
-        #############################################################################################################
+            r = 0
+            for i in range (OBSERV_BATCH):
+                for j in range (USER_CNT):
+                    if (self.isChannelBlocked(self.state_batch_ls[j][i])):     #还有就是如果action与当前信道相同的情况
+                        r -= 1
+                    else :
+                        r += 0.1
+            #print()
+            #print(avail_sum_state_next)
         #刷新信道使用状态
         #self.refresh()
-
-        return np.array(next_state), r, 0 ,{}
+        self.state = next_state_ls
+        return np.array(next_state_ls), r, 0 ,{}
 
     def refresh(self):
     #刷新信道使用状态
@@ -323,11 +316,13 @@ class ChannelEnv(gym.Env):
             self.updateStateTransfert()
 
     def reset(self):
-        i = int(random.random() * CHANNEL_CNT) + 1
-        if self.channel_available[i]:
-            self.state = i + CHANNEL_CNT
-        else:
-            self.state = i
+        self.state = [0] * USER_CNT
+        for k in range(USER_CNT):
+            i = int(random.random() * CHANNEL_CNT) + 1
+            if self.channel_available[i]:
+                self.state[k] = i + CHANNEL_CNT
+            else:
+                self.state[k] = i
         return np.array(self.state)
 
     def render(self, mode='human', close=False):
@@ -375,10 +370,10 @@ class ChannelEnv(gym.Env):
 
         if self.state is None: return None
         #self.robotrans.set_translation(self.x[self.state-1],self.y[self.state-1])
-        if (self.state > CHANNEL_CNT):
-            self.robotrans.set_translation(self.x[self.state-1-CHANNEL_CNT], self.y[self.state-1-CHANNEL_CNT])
+        if (self.state[0] > CHANNEL_CNT):
+            self.robotrans.set_translation(self.x[self.state[0]-1-CHANNEL_CNT], self.y[self.state[0]-1-CHANNEL_CNT])
         else:
-            self.robotrans.set_translation(self.x[self.state-1], self.y[self.state-1])
+            self.robotrans.set_translation(self.x[self.state[0]-1], self.y[self.state[0]-1])
 
 
         return self.viewer.render(return_rgb_array=mode == 'rgb_array')
