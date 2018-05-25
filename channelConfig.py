@@ -9,14 +9,14 @@ STUBBORN_REWARD = 10.0 #stick to a certain correct channel
 CHANNEL_CNT = 10
 STATE_CNT = CHANNEL_CNT * 2   #double of channal count
 
-USER_CNT = 1
+USER_CNT = 2
 REFRESH = 1
 REFRESH_METHOD_OLD = 0
 
 ## Jammer
 BLOCK_CNT = 3 # number of channel jammed at each time slot
-#JAMMER_TYPE = 'Random_jammer_1'
-#JAMMER_TYPE = 'Random_jammer_2'
+# JAMMER_TYPE = 'Random_jammer_1'
+# JAMMER_TYPE = 'Random_jammer_2'
 JAMMER_TYPE = 'Markov_jammer'
 # jamming probability
 CHANNEL_P = [0.22, 0.21, 0.05, 0.02, 0.25, 0.14, 0.02, 0.01, 0.04, 0.04]
@@ -35,5 +35,7 @@ INITIAL_STATES = [1, 4, 7]
 
 ##channel1
 literation = 10000
+# AGENT_ACT_POLICY = 'Determinate'
+AGENT_ACT_POLICY = 'Mixed'
 
 OBSERV_BATCH = 1 #number of timeslot to be observed

@@ -11,6 +11,7 @@ global literation           #Number of test literation
 
 OBSERV_BATCH = channelConfig.OBSERV_BATCH
 USER_CNT = channelConfig.USER_CNT
+AGENT_ACT_POLICY = channelConfig.AGENT_ACT_POLICY
 
 class Brain:
 
@@ -97,11 +98,33 @@ class Agent:
         else:
             print("*****predict step*****")
             pred = self.brain.predictOne(s)
-            if numpy.argmax(pred) == 0:
-                index = numpy.argsort(pred)
-                return index[len(index)-2]
-            else:
-                return numpy.argmax(pred)
+            index = numpy.argsort(pred)
+            index_len = len(index)
+            if AGENT_ACT_POLICY == 'Determinate':
+                if numpy.argmax(pred) == 0:
+                    index = numpy.argsort(pred)
+                    return index[len(index)-2]
+                else:
+                    return numpy.argmax(pred)
+            elif AGENT_ACT_POLICY == 'Mixed':
+                # Find first two non zero indeices
+                max_indeices = [0, 0]
+                finded_index = 0
+                for i in range(len(index)-1,0,-1):
+                    if index[i] != 0:
+                        max_indeices[finded_index] = index[i]
+                        finded_index += 1
+                    if finded_index >= 2:
+                        break
+                # Action decision
+                relative_score = [pred[max_indeices[0]]-pred[index[0]],
+                        pred[max_indeices[1]]-pred[index[0]]]
+                p_aggre = [0,relative_score[0]/(sum(relative_score)),1]
+                ran = random.random()
+                if ran>= p_aggre[0] and ran < p_aggre[1]:
+                    return max_indeices[0]
+                else:
+                    return max_indeices[1]
 
     def observe(self, sample):  # in (s, a, r, s_) format
         self.memory.add(sample)
@@ -174,15 +197,14 @@ class Environment:
                 f_channel.write(',')
             else:
                 f_channel.write('\n')
-        state_batch_ls = [[0] * OBSERV_BATCH] * USER_CNT
-        next_state_batch_ls =  [[0] * OBSERV_BATCH] * USER_CNT
+        state_batch_ls = [[0 for i in range(OBSERV_BATCH)] for j in range(USER_CNT)]
+        next_state_batch_ls =  [[0 for i in range(OBSERV_BATCH)] for j in range(USER_CNT)]
 
         for i in range(USER_CNT):
             state_batch_ls[i][0] = ls_s[i]
 
         for i in range(0, literation):
             self.env.render()
-
             #a = agent.act(s)
             ls_a = [0] * USER_CNT
             for j in range(USER_CNT):
@@ -212,11 +234,18 @@ class Environment:
            #     print ("done\n")
             for k in range(USER_CNT):
                 for j in range(OBSERV_BATCH - 1, 0, -1):
-                    next_state_batch_ls[k][j] = state_batch_ls[k][j-1]
+                    next_state_batch_ls[k][j] = state_batch_ls[k][max(j-1,0)]
                 next_state_batch_ls[k][0]= ls_s_[k]
-            #agent.observe( (s, a, r, s_) ) #include add to memory
+                print ("States:",k, state_batch_ls[k][0])
+                print("Next States:",next_state_batch_ls[k][0])
+
                 print ( "stuff to be observed#############",(np.array(state_batch_ls[k]), ls_a[k], r, np.array(next_state_batch_ls[k])) )
-                agent.observe( (np.array(state_batch_ls[k]), ls_a[k], r, np.array(next_state_batch_ls[k])) )###################################
+                agent.observe( (np.array(state_batch_ls[k]), ls_a[k], r, np.array(next_state_batch_ls[k])))
+
+
+            for k in range(USER_CNT):
+                print ("States:",k, state_batch_ls[k][0])
+                print("Next States:",next_state_batch_ls[k][0])
 
             agent.replay()
             for k in range(USER_CNT):
@@ -231,8 +260,8 @@ class Environment:
 
             ls_s = ls_s_
             for k in range(USER_CNT):
-                for i in range(0, OBSERV_BATCH):
-                    state_batch_ls[k][i] = next_state_batch_ls[k][i]
+                for j in range(OBSERV_BATCH):
+                    state_batch_ls[k][j] = next_state_batch_ls[k][j]
 
             R += r
 

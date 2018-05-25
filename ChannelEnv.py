@@ -109,7 +109,7 @@ class ChannelEnv(gym.Env):
         self.y=[0 for x in range(CHANNEL_CNT)]
         self.channel_cnt = CHANNEL_CNT
         self.jammer = Jammer()
-        self.state_batch_ls = [[0]*OBSERV_BATCH] * USER_CNT
+        self.state_batch_ls = [[0 for i in range(OBSERV_BATCH)] for j in range(USER_CNT)]
 
         for i in range (CHANNEL_CNT):
             if (i % 5 == 0):
@@ -253,10 +253,18 @@ class ChannelEnv(gym.Env):
                     self.t[key] = j + 1 + CHANNEL_CNT
 
     def updateStates(self, action_ls): # To get the next_states of users
-        next_states = [0 for x in range(USER_CNT) ]
+        next_states = [0] * USER_CNT
         for i in range(USER_CNT):
             if self.channel_available[action_ls[i]]:
-                next_states[i] = action_ls[i] + self.channel_cnt
+                collision_flag = 0
+                for k in range(USER_CNT):
+                    if action_ls[i] == action_ls[k] and i != k:
+                        collision_flag = 1
+                        break
+                if collision_flag:
+                    next_states[i] = action_ls[i]
+                else:
+                    next_states[i] = action_ls[i] + self.channel_cnt
             else:
                 next_states[i] = action_ls[i]
         return next_states
@@ -289,16 +297,26 @@ class ChannelEnv(gym.Env):
             #avail_sum_state_next = OBSERV_BATCH * USER_CNT                     #现在主要考虑的是OBSERV_BATCH长度中有几次通信成功
             for j in range(USER_CNT): # update self.state_batch_ls
                 for i in range(OBSERV_BATCH - 1, 0, -1):
-                    self.state_batch_ls[j][i] = state_batch_ls[j][i-1]
+                    self.state_batch_ls[j][i] = state_batch_ls[j][max(i-1,0)]
                 self.state_batch_ls[j][0] = next_state_ls[j]
 
             r = 0
-            for i in range (OBSERV_BATCH):
-                for j in range (USER_CNT):
+            # Calculate reward
+            for i in range(OBSERV_BATCH):
+                for j in range(USER_CNT):
                     if (self.isChannelBlocked(self.state_batch_ls[j][i])):     #还有就是如果action与当前信道相同的情况
+                        # the channel is jammed
                         r -= 1
                     else :
-                        r += 0.1
+                        collision_flag = 0
+                        for k in range(USER_CNT):
+                            if action_ls[j] == action_ls[k] and j != k:
+                                collision_flag = 1
+                                break
+                        if collision_flag:
+                            r -= 1
+                        else:
+                            r += 0.1
             #print()
             #print(avail_sum_state_next)
         #刷新信道使用状态
