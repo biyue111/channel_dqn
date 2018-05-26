@@ -45,6 +45,11 @@ pip install -e '.[classic_control]'
 ```
 see also the github page of [gym](https://github.com/openai/gym).
 
+* The mlk-2018 may not work with keras, so the mlk-2017 is needed. Install it with the following command:
+```
+conda install mkl=2017
+```
+
 
 ### Add channel environment
 1. Open `<where you clone the gym respo>gym/gym/envs/__init__.py`, add:
@@ -71,3 +76,10 @@ python ./channel1.py
 ./run.sh
 ```
 The `run.sh` file will copy the `ChannelEnv.py` into the gym and execute program `channel1.py`
+
+5. The program may fail at first time, open `anaconda3/envs/gymtestbed/lib/python3.6/site-packages/keras/backend/__init.py`, 
+switch the `keras` backend to `theano`:
+```python
+# Default backend: TensorFlow.
+_BACKEND = 'theano'
+```
