@@ -2,30 +2,34 @@ import math
 import gym
 import logging
 import random
-from gym import spaces, logger
-from gym.utils import seeding
 import numpy as np
 import channelConfig as channelConfig
 
 logger = logging.getLogger(__name__)
 
-CORRECT_REWARD = channelConfig.CORRECT_REWARD  #wrong to correct
-CR_TO_CR_REWARD = channelConfig.CR_TO_CR_REWARD  #correct to another correct
-PUNISH_REWARD = channelConfig.PUNISH_REWARD  #wrong to itself
-WR_TO_WR_REWARD = channelConfig.WR_TO_WR_REWARD  #wrong to another wrong
-CR_TO_WR_REWARD = channelConfig.CR_TO_WR_REWARD  #correct to wrong
-STUBBORN_REWARD = channelConfig.STUBBORN_REWARD #stick to a certain correct channel
+CORRECT_REWARD = channelConfig.CORRECT_REWARD  # wrong to correct
+CR_TO_CR_REWARD = channelConfig.CR_TO_CR_REWARD  # correct to another correct
+PUNISH_REWARD = channelConfig.PUNISH_REWARD  # wrong to itself
+WR_TO_WR_REWARD = channelConfig.WR_TO_WR_REWARD  # wrong to another wrong
+CR_TO_WR_REWARD = channelConfig.CR_TO_WR_REWARD  # correct to wrong
+STUBBORN_REWARD = channelConfig.STUBBORN_REWARD  # stick to a certain correct channel
+
+CONNECTION_SUCCESS_REWARD = channelConfig.CONNECTION_SUCCESS_REWARD
+CONNECTION_FAIL_REWARD = channelConfig.CONNECTION_FAIL_REWARD
+HAVE_COLLISION = channelConfig.HAVE_COLLISION
 
 OBSERV_BATCH = channelConfig.OBSERV_BATCH
 
 CHANNEL_CNT = channelConfig.CHANNEL_CNT
-STATE_CNT = channelConfig.STATE_CNT #double of channal count
+STATE_CNT = channelConfig.STATE_CNT  # double of channal count
 
-#BLOCK_CNT = channelConfig.BLOCK_CNT
+# BLOCK_CNT = channelConfig.BLOCK_CNT
 USER_CNT = channelConfig.USER_CNT
 REFRESH = channelConfig.REFRESH
-#REFRESH_METHOD_OLD = channelConfig.REFRESH_METHOD_OLD
-#JAMMER_TYPE = channelConfig.JAMMER_TYPE
+
+
+# REFRESH_METHOD_OLD = channelConfig.REFRESH_METHOD_OLD
+# JAMMER_TYPE = channelConfig.JAMMER_TYPE
 
 
 class Jammer:
@@ -37,116 +41,119 @@ class Jammer:
         self.states = channelConfig.INITIAL_STATES
         # For stocastic jammer
         self.channel_p = channelConfig.CHANNEL_P
-        self.p_aggre = [0 for x in range(CHANNEL_CNT+1)]
-        for i in range(1, CHANNEL_CNT+1):
-            self.p_aggre[i] = self.channel_p[i-1] + self.p_aggre[i-1]
+        self.p_aggre = [0 for x in range(CHANNEL_CNT + 1)]
+        for i in range(1, CHANNEL_CNT + 1):
+            self.p_aggre[i] = self.channel_p[i - 1] + self.p_aggre[i - 1]
 
     def changeState(self):
         if self.type == 'Markov_jammer':
             for i in range(self.block_cnt):
-                state_p = self.transfert_matrix[self.states[i]-1]
-                p_aggre=[0 for x in range(CHANNEL_CNT+1)]
-                for j in range (1,CHANNEL_CNT+1):
-                    p_aggre[j] = state_p[j-1] + p_aggre[j-1]
-                t = random.random()
-                for j in range (1, CHANNEL_CNT+1):
-                    if p_aggre[j-1] < t and t <= p_aggre[j]:
-                        self.states[i] = j
-                        break
+                state_p = self.transfert_matrix[self.states[i] - 1]
+                # p_aggre = [0 for x in range(CHANNEL_CNT + 1)]
+                # for j in range(1, CHANNEL_CNT + 1):
+                #     p_aggre[j] = state_p[j - 1] + p_aggre[j - 1]
+                # t = random.random()
+                # for j in range(1, CHANNEL_CNT + 1):
+                #     if p_aggre[j - 1] < t <= p_aggre[j]:
+                #         self.states[i] = j
+                #         break
+                jammed_channel = np.random.choice(range(1, CHANNEL_CNT+1), 1, state_p)
+                self.states[i] = jammed_channel[0]
 
     def act(self):
         channel_available = dict()
-        for i in range(1, CHANNEL_CNT+1):
+        for i in range(1, CHANNEL_CNT + 1):
             channel_available[i] = 1
         if self.type == 'Random_jammer_1':
             # A jammer blockes certain channels with fixed probability
             # The number of jammed channels is different at each timeslot
-            for i in range (CHANNEL_CNT):
+            for i in range(CHANNEL_CNT):
                 ran = random.random()
-                print("channel:", i+1)
+                print("channel:", i + 1)
                 if ran < self.channel_p1[i]:
-                    #print("random num:", ran)
-                    #print("channel_p:", self.channel_p1[i])
-                    #print("channel blocked")
-                    channel_available[i+1] = 0         #this channel blocked
+                    # print("random num:", ran)
+                    # print("channel_p:", self.channel_p1[i])
+                    # print("channel blocked")
+                    channel_available[i + 1] = 0  # this channel blocked
                 else:
-                    #print("random num:", ran)
-                    #print("channel_p:", self.channel_p1[i])
-                    #print("channel available")
-                    channel_available[i+1] = 1         #this channel available
+                    # print("random num:", ran)
+                    # print("channel_p:", self.channel_p1[i])
+                    # print("channel available")
+                    channel_available[i + 1] = 1  # this channel available
         elif self.type == 'Random_jammer_2':
             # A jammer blockes 3 channels at each timeslot with fixed probability
             ran = random.random()
-            for i in range (CHANNEL_CNT):
-                if (ran >= self.p_aggre[i]) and (ran < self.p_aggre[i+1]):
-                    channel_available[i+1] = 0
+            for i in range(CHANNEL_CNT):
+                if (ran >= self.p_aggre[i]) and (ran < self.p_aggre[i + 1]):
+                    channel_available[i + 1] = 0
             available_cnt = CHANNEL_CNT - 1
-            while available_cnt > (CHANNEL_CNT-self.block_cnt):
+            while available_cnt > (CHANNEL_CNT - self.block_cnt):
                 ran = random.random()
-                for i in range (CHANNEL_CNT):
-                    if (ran >= self.p_aggre[i]) and (ran < self.p_aggre[i+1]):
-                        channel_available[i+1] = 0
+                for i in range(CHANNEL_CNT):
+                    if (ran >= self.p_aggre[i]) and (ran < self.p_aggre[i + 1]):
+                        channel_available[i + 1] = 0
                 available_cnt = 0
-                for i in range (CHANNEL_CNT):
-                    available_cnt += channel_available[i+1]
+                for i in range(CHANNEL_CNT):
+                    available_cnt += channel_available[i + 1]
         elif self.type == 'Markov_jammer':
             self.changeState()
             for i in range(self.block_cnt):
                 channel_available[self.states[i]] = 0
         else:
-            print ("No jammer named:" + JAMMER_TYPE)
+            print("No jammer named:" + self.type)
         return channel_available
+
 
 class ChannelEnv(gym.Env):
     metadata = {
         'render.modes': ['human', 'rgb_array'],
-        'video.frames_per_second' : 2
+        'video.frames_per_second': 2
     }
 
     def __init__(self):
-        self.states = range(1,STATE_CNT+1) #状态空间
-        self.x=[0 for x in range(CHANNEL_CNT)]
-        self.y=[0 for x in range(CHANNEL_CNT)]
+        self.states = range(1, STATE_CNT + 1)  # 状态空间
+        self.x = [0 for x in range(CHANNEL_CNT)]
+        self.y = [0 for x in range(CHANNEL_CNT)]
         self.channel_cnt = CHANNEL_CNT
         self.jammer = Jammer()
         self.state_batch_ls = [[0 for i in range(OBSERV_BATCH)] for j in range(USER_CNT)]
 
-        for i in range (CHANNEL_CNT):
+        for i in range(CHANNEL_CNT):
             if (i % 5 == 0):
                 self.x[i] = 200
-            elif (i % 5 == 1) :
+            elif (i % 5 == 1):
                 self.x[i] = 400
-            elif (i % 5 == 2) :
+            elif (i % 5 == 2):
                 self.x[i] = 600
-            elif (i % 5 == 3) :
+            elif (i % 5 == 3):
                 self.x[i] = 800
             else:
                 self.x[i] = 1000
 
-        for i in range (CHANNEL_CNT):
+        for i in range(CHANNEL_CNT):
             self.y[i] = 1100 - 200 * int(i / 5)
 
-        self.channel_p1 = [0.9, 0.11, 0.85, 0.92, 0.95, 0.99, 0.8, 0.60, 0.98, 0.99, 0.90, 0.05, 0.80, 0.05, 0.91, 0.93, 0.80, 0.95, 0.92, 0.08, 0.90, 0.93, 0.99, 0.37, 0.95, 0.91, 0.99, 0.87, 0.04, 0.91] #jamming probability
+        self.channel_p1 = [0.9, 0.11, 0.85, 0.92, 0.95, 0.99, 0.8, 0.60, 0.98, 0.99, 0.90, 0.05, 0.80, 0.05, 0.91, 0.93,
+                           0.80, 0.95, 0.92, 0.08, 0.90, 0.93, 0.99, 0.37, 0.95, 0.91, 0.99, 0.87, 0.04,
+                           0.91]  # jamming probability
 
-        #终止状态为字典格式 #需初始化及动态更新
+        # 终止状态为字典格式 #需初始化及动态更新
 
         self.channel_available = self.jammer.act()
 
         self.actions = [0 for x in range(CHANNEL_CNT)]
-        for i in range (CHANNEL_CNT):
-            self.actions[i] = i+1
+        for i in range(CHANNEL_CNT):
+            self.actions[i] = i + 1
 
-        self.rewards = dict()        #回报的数据结构为字典
-        self.calculateReward()
-        self.t = dict()             #状态转移的数据格式为字典
+        self.rewards = dict()  # 回报的数据结构为字典
+        self.t = dict()  # 状态转移的数据格式为字典
         self.updateStateTransfert()
 
-        self.gamma = 0.8         #折扣因子
+        self.gamma = 0.8  # 折扣因子
         self.viewer = None
         self.state = None
 
-
-    #def getTerminal(self):
+    # def getTerminal(self):
     #    return self.channel_available
 
     def getGamma(self):
@@ -157,14 +164,18 @@ class ChannelEnv(gym.Env):
 
     def getAction(self):
         return self.actions
+
     def getChannelAvailable(self):
         return self.channel_available
-    def setAction(self,s):
-        self.state=s
+
+    def setAction(self, s):
+        self.state = s
+
     def getRewardChart(self):
-        print ("\nReward Chart\n",self.rewards)
+        print("\nReward Chart\n", self.rewards)
+
     def getTChart(self):
-        print ("\nTransformation Chart\n",self.t)
+        print("\nTransformation Chart\n", self.t)
 
     def isChannelBlocked(self, s):
         # get channel availability
@@ -177,10 +188,10 @@ class ChannelEnv(gym.Env):
         else:
             return s
 
-    def setStateBatch(self, s): # Read user's state
+    def setStateBatch(self, s):  # Read user's state
         self.state_batch_ls = s
 
-    #def jammerAction(self):
+    # def jammerAction(self):
     #    for i in range(CHANNEL_CNT):
     #        self.channel_available[i+1] = 1
     #    if JAMMER_TYPE == 'Random_jammer_1':
@@ -222,37 +233,37 @@ class ChannelEnv(gym.Env):
     #    else:
     #        print ("No jammer named:" + JAMMER_TYPE)
 
-    def calculateReward(self):
-        for i in range (STATE_CNT):   #i in 0-9 means blocked, 10-19 means available
-            for j in range (CHANNEL_CNT):
-                key = "%d-%d"%(i+1, j+1)
-                if self.isChannelBlocked(i):             #i is blocked
-                    if (self.channel_available[j+1] == 1):
-                        self.rewards[key] = CORRECT_REWARD       #wrong to correct
-                    elif (self.channel_available[j+1] == 0):
-                        if (i==j):
-                            self.rewards[key] = PUNISH_REWARD     #wrong to itself
-                        else:
-                            self.rewards[key] = WR_TO_WR_REWARD   #wrong to another wrong
-                else:                             # i-10 is available
-                    if (self.channel_available[j+1] == 0):
-                        self.rewards[key] = CR_TO_WR_REWARD           #correct to wrong
-                    elif (self.channel_available[j+1] == 1):
-                        if (self.getChannelNumber(i) == j):
-                            self.rewards[key] = CORRECT_REWARD    #correct to itself
-                        else:
-                            self.rewards[key] = CR_TO_CR_REWARD   #correct to another correct
+    # def calculateReward(self):
+    #     for i in range(STATE_CNT):  # i in 0-9 means blocked, 10-19 means available
+    #         for j in range(CHANNEL_CNT):
+    #             key = "%d-%d" % (i + 1, j + 1)
+    #             if self.isChannelBlocked(i):  # i is blocked
+    #                 if (self.channel_available[j + 1] == 1):
+    #                     self.rewards[key] = CORRECT_REWARD  # wrong to correct
+    #                 elif (self.channel_available[j + 1] == 0):
+    #                     if (i == j):
+    #                         self.rewards[key] = PUNISH_REWARD  # wrong to itself
+    #                     else:
+    #                         self.rewards[key] = WR_TO_WR_REWARD  # wrong to another wrong
+    #             else:  # i-10 is available
+    #                 if (self.channel_available[j + 1] == 0):
+    #                     self.rewards[key] = CR_TO_WR_REWARD  # correct to wrong
+    #                 elif (self.channel_available[j + 1] == 1):
+    #                     if (self.getChannelNumber(i) == j):
+    #                         self.rewards[key] = CORRECT_REWARD  # correct to itself
+    #                     else:
+    #                         self.rewards[key] = CR_TO_CR_REWARD  # correct to another correct
 
     def updateStateTransfert(self):
-        for i in range (STATE_CNT):
-            for j in range (CHANNEL_CNT):
-                key = "%d-%d"%(i+1, j+1)
-                if (self.channel_available[j+1] == 0):
-                    self.t[key] = j+1
+        for i in range(STATE_CNT):
+            for j in range(CHANNEL_CNT):
+                key = "%d-%d" % (i + 1, j + 1)
+                if (self.channel_available[j + 1] == 0):
+                    self.t[key] = j + 1
                 else:
                     self.t[key] = j + 1 + CHANNEL_CNT
 
-    def updateStates(self, action_ls): # To get the next_states of users
+    def update_states(self, action_ls):  # To get the next_states of users
         next_states = [0] * USER_CNT
         for i in range(USER_CNT):
             if self.channel_available[action_ls[i]]:
@@ -261,7 +272,7 @@ class ChannelEnv(gym.Env):
                     if action_ls[i] == action_ls[k] and i != k:
                         collision_flag = 1
                         break
-                if collision_flag:
+                if collision_flag and HAVE_COLLISION:
                     next_states[i] = action_ls[i]
                 else:
                     next_states[i] = action_ls[i] + self.channel_cnt
@@ -269,68 +280,71 @@ class ChannelEnv(gym.Env):
                 next_states[i] = action_ls[i]
         return next_states
 
+    def calculate_reward(self, action_ls):
+        r = 0
+        for i in range(OBSERV_BATCH):
+            for j in range(USER_CNT):
+                if self.isChannelBlocked(self.state_batch_ls[j][i]):  # 还有就是如果action与当前信道相同的情况
+                    # the channel is jammed
+                    r += CONNECTION_FAIL_REWARD
+                else:
+                    channel_share = 1
+                    for k in range(USER_CNT):
+                        if action_ls[j] == action_ls[k] and j != k:
+                            channel_share += 1
+                    if HAVE_COLLISION:
+                        r += CONNECTION_FAIL_REWARD
+                    elif not HAVE_COLLISION:
+                        r += CONNECTION_SUCCESS_REWARD / channel_share
+        return r
 
     def step(self, action_ls):
-            #系统当前状态
+        # 系统当前状态
         state_ls = [0] * USER_CNT
         for i in range(USER_CNT):
             state_ls[i] = self.state_batch_ls[i][0]
         print("present state:", *state_ls)
         self.channel_available = self.jammer.act()
-        next_state_ls = self.updateStates(action_ls)
-       # key = "%d-%d"%(state, action)   #将状态和动作组成字典的键值
-       # print("key:", key)
-       # #print("reward:",self.rewards[key])
-       #     #状态转移
-       # if key in self.t:
-       #     print("key in dict:", key)
-       #     next_state = self.t[key]
-       #     print("next state:", next_state)
-       # else:
-       #     print("key not in dict:", key)
-       #     next_state = state
-       # self.state = next_state
+        next_state_ls = self.update_states(action_ls)
+        # key = "%d-%d"%(state, action)   #将状态和动作组成字典的键值
+        # print("key:", key)
+        # #print("reward:",self.rewards[key])
+        #     #状态转移
+        # if key in self.t:
+        #     print("key in dict:", key)
+        #     next_state = self.t[key]
+        #     print("next state:", next_state)
+        # else:
+        #     print("key not in dict:", key)
+        #     next_state = state
+        # self.state = next_state
 
-   ###########in case of markov ################################################ I think the way we calculate reward matters
-        if (self.jammer.type == 'Markov_jammer'):
-            #avail_sum_state = OBSERV_BATCH * USER_CNT
-            #avail_sum_state_next = OBSERV_BATCH * USER_CNT                     #现在主要考虑的是OBSERV_BATCH长度中有几次通信成功
-            for j in range(USER_CNT): # update self.state_batch_ls
+        ###########in case of markov ################################################ I think the way we calculate reward matters
+        r = 0
+        if self.jammer.type == 'Markov_jammer':
+            # avail_sum_state = OBSERV_BATCH * USER_CNT
+            # avail_sum_state_next = OBSERV_BATCH * USER_CNT                     #现在主要考虑的是OBSERV_BATCH长度中有几次通信成功
+            for j in range(USER_CNT):  # update self.state_batch_ls
                 for i in range(OBSERV_BATCH - 1, 0, -1):
-                    self.state_batch_ls[j][i] = state_batch_ls[j][max(i-1,0)]
+                    self.state_batch_ls[j][i] = self.state_batch_ls[j][max(i - 1, 0)]
                 self.state_batch_ls[j][0] = next_state_ls[j]
 
-            r = 0
             # Calculate reward
-            for i in range(OBSERV_BATCH):
-                for j in range(USER_CNT):
-                    if (self.isChannelBlocked(self.state_batch_ls[j][i])):     #还有就是如果action与当前信道相同的情况
-                        # the channel is jammed
-                        r -= 1
-                    else :
-                        collision_flag = 0
-                        for k in range(USER_CNT):
-                            if action_ls[j] == action_ls[k] and j != k:
-                                collision_flag = 1
-                                break
-                        if collision_flag:
-                            r -= 1
-                        else:
-                            r += 0.1
-            #print()
-            #print(avail_sum_state_next)
-        #刷新信道使用状态
-        #self.refresh()
+            r = self.calculate_reward(action_ls)
+            # print()
+            # print(avail_sum_state_next)
+        # 刷新信道使用状态
+        # self.refresh()
         self.state = next_state_ls
-        return np.array(next_state_ls), r, 0 ,{}
+        return np.array(next_state_ls), r, 0, {}
 
     def refresh(self):
-    #刷新信道使用状态
+        # 刷新信道使用状态
         if (REFRESH):
             self.channel_available = self.jammer.act()
-    #reward update
+            # reward update
             self.calculateReward()
-    #t update
+            # t update
             self.updateStateTransfert()
 
     def reset(self):
@@ -355,20 +369,20 @@ class ChannelEnv(gym.Env):
         if self.viewer is None:
             from gym.envs.classic_control import rendering
             self.viewer = rendering.Viewer(screen_width, screen_height)
-            #创建网格世界
-            #self.line1 = rendering.Line((100,300),(500,300))
-                #创建信道模型1
+            # 创建网格世界
+            # self.line1 = rendering.Line((100,300),(500,300))
+            # 创建信道模型1
             self.chnl = []
             for i in range(CHANNEL_CNT):
                 self.chnl.append(rendering.make_circle(50))
                 self.circletrans = rendering.Transform(translation=(self.x[i], self.y[i]))
                 self.chnl[i].add_attr(self.circletrans)
                 if self.channel_available[i + 1]:
-                    self.chnl[i].set_color(0,255,0)        #available - green
+                    self.chnl[i].set_color(0, 255, 0)  # available - green
                 else:
-                    self.chnl[i].set_color(255,0,0) #blocked - red
-                    #创建机器人
-            self.robot= rendering.make_circle(30)
+                    self.chnl[i].set_color(255, 0, 0)  # blocked - red
+                    # 创建机器人
+            self.robot = rendering.make_circle(30)
             self.robotrans = rendering.Transform()
             self.robot.add_attr(self.robotrans)
             self.robot.set_color(255, 255, 255)
@@ -381,17 +395,16 @@ class ChannelEnv(gym.Env):
         else:
             for i in range(CHANNEL_CNT):
                 if self.channel_available[i + 1]:
-                    self.chnl[i].set_color(0,255,0)        #available - green
+                    self.chnl[i].set_color(0, 255, 0)  # available - green
                 else:
-                    self.chnl[i].set_color(255,0,0) #blocked - red
-
+                    self.chnl[i].set_color(255, 0, 0)  # blocked - red
 
         if self.state is None: return None
-        #self.robotrans.set_translation(self.x[self.state-1],self.y[self.state-1])
+        # self.robotrans.set_translation(self.x[self.state-1],self.y[self.state-1])
         if (self.state[0] > CHANNEL_CNT):
-            self.robotrans.set_translation(self.x[self.state[0]-1-CHANNEL_CNT], self.y[self.state[0]-1-CHANNEL_CNT])
+            self.robotrans.set_translation(self.x[self.state[0] - 1 - CHANNEL_CNT],
+                                           self.y[self.state[0] - 1 - CHANNEL_CNT])
         else:
-            self.robotrans.set_translation(self.x[self.state[0]-1], self.y[self.state[0]-1])
-
+            self.robotrans.set_translation(self.x[self.state[0] - 1], self.y[self.state[0] - 1])
 
         return self.viewer.render(return_rgb_array=mode == 'rgb_array')
